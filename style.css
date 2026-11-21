@@ -21,6 +21,43 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ---------- Loading overlay ---------- */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity .5s ease;
+}
+.loader.hidden { opacity: 0; pointer-events: none; }
+.loader-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.loader-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #f6f2ec;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: 20px;
+}
+.loader-box strong {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 2px;
+  font-size: 18px;
+}
+.loader-box span:last-child { font-size: 13px; color: var(--muted); }
+
 /* ---------- Top bar ---------- */
 .topbar {
   position: sticky;
