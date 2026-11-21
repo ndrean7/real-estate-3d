@@ -48,37 +48,88 @@
     ctx.globalAlpha = 1;
   }
 
-  var grassTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#6d9a4b'; ctx.fillRect(0, 0, s, s);
-    speckle(ctx, s, 900, ['#5d8a3e', '#7fae58', '#648c42', '#8fbc66'], 1, 3.2);
-    ctx.strokeStyle = 'rgba(90,130,60,.5)';
-    for (var i = 0; i < 160; i++) {
+  /* ---- Real photo textures (Poly Haven, CC0 — local files in textures/) ---- */
+  var loaderEl = document.getElementById('loader');
+  var loaderHidden = false;
+  function hideLoader() {
+    if (loaderHidden || !loaderEl) return;
+    loaderHidden = true;
+    loaderEl.classList.add('hidden');
+  }
+  var texManager = new THREE.LoadingManager();
+  texManager.onLoad = function () { hideLoader(); };
+  texManager.onError = function (u) { console.warn('texture failed:', u); };
+  setTimeout(hideLoader, 6000); // never trap the user behind the loader
+  var photoLoader = new THREE.TextureLoader(texManager);
+  function photoTex(file, rx, ry, srgb) {
+    var t = photoLoader.load('textures/' + file);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(rx || 1, ry || 1);
+    if (srgb !== false) t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    return t;
+  }
+  function photoPair(slug, rx, ry) {
+    var map = photoTex(slug + '_diff_1k.jpg', rx, ry, true);
+    var rough = photoTex(slug + '_rough_1k.jpg', rx, ry, false);
+    return { map: map, rough: rough };
+  }
+  function cloneRepeat(t, rx, ry) {
+    var c = t.clone();
+    c.repeat.set(rx, ry);
+    c.needsUpdate = true;
+    return c;
+  }
+
+  var grassTex = canvasTex(1024, function (ctx, s) {
+    ctx.fillStyle = '#57853a'; ctx.fillRect(0, 0, s, s);
+    // Large soft lawn patches (mowing bands / sun variation)
+    for (var p = 0; p < 46; p++) {
+      ctx.globalAlpha = 0.04 + Math.random() * 0.06;
+      ctx.fillStyle = ['#639145', '#4d7d31', '#74a050', '#47712c'][(Math.random() * 4) | 0];
+      ctx.beginPath();
+      ctx.ellipse(Math.random() * s, Math.random() * s, 60 + Math.random() * 150, 40 + Math.random() * 110, Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Dry patches
+    for (var d = 0; d < 14; d++) {
+      ctx.globalAlpha = 0.06 + Math.random() * 0.06;
+      ctx.fillStyle = '#a8a05c';
+      ctx.beginPath();
+      ctx.ellipse(Math.random() * s, Math.random() * s, 30 + Math.random() * 70, 20 + Math.random() * 50, Math.random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    speckle(ctx, s, 3200, ['#5d8a3e', '#7fae58', '#648c42', '#8fbc66', '#4a7a30'], 1, 3.4);
+    // Grass blades
+    ctx.lineWidth = 1.4;
+    for (var i = 0; i < 1400; i++) {
       var x = Math.random() * s, y = Math.random() * s;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 1.5, y - 5); ctx.stroke();
+      ctx.strokeStyle = ['rgba(90,130,60,.55)', 'rgba(120,165,80,.5)', 'rgba(70,110,50,.55)'][(Math.random() * 3) | 0];
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (Math.random() * 3 - 1.5), y - 4 - Math.random() * 5); ctx.stroke();
     }
   }, 26, 20);
+  var grassRoughTex = canvasTex(256, function (ctx, s) {
+    ctx.fillStyle = '#e8e8e8'; ctx.fillRect(0, 0, s, s);
+    speckle(ctx, s, 900, ['#d8d8d8', '#f2f2f2', '#c8c8c8'], 1, 3);
+  }, 26, 20);
 
-  var asphaltTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#4b4e56'; ctx.fillRect(0, 0, s, s);
-    speckle(ctx, s, 700, ['#43464e', '#565a63', '#3e4148'], 1, 2.4);
-    ctx.fillStyle = '#e8e6df';
-    for (var y = 0; y < s; y += 64) ctx.fillRect(s / 2 - 4, y + 8, 8, 34);
-  }, 1, 14);
-
-  var asphaltPlainTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#4b4e56'; ctx.fillRect(0, 0, s, s);
-    speckle(ctx, s, 700, ['#43464e', '#565a63', '#3e4148'], 1, 2.4);
-  }, 2, 10);
-
-  var paverTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#c9c2b2'; ctx.fillRect(0, 0, s, s);
-    speckle(ctx, s, 350, ['#bdb5a4', '#d6cfbf', '#b3ab99'], 1, 2.5);
-    ctx.strokeStyle = '#a49c8a'; ctx.lineWidth = 3;
-    for (var i = 0; i <= 4; i++) {
-      ctx.beginPath(); ctx.moveTo(i * 64, 0); ctx.lineTo(i * 64, s); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i * 64); ctx.lineTo(s, i * 64); ctx.stroke();
-    }
-  }, 4, 4);
+  var asphaltPhoto = photoPair('asphalt_01', 10, 1);
+  var asphaltSidePhoto = {
+    map: cloneRepeat(asphaltPhoto.map, 1, 8),
+    rough: cloneRepeat(asphaltPhoto.rough, 1, 8)
+  };
+  var cobblePhoto = photoPair('cobblestone_01', 1, 4);
+  var cobblePathPhoto = {
+    map: cloneRepeat(cobblePhoto.map, 1, 2),
+    rough: cloneRepeat(cobblePhoto.rough, 1, 2)
+  };
+  var concretePhoto = photoPair('concrete_floor_01', 3, 3);
+  var brickPhoto = photoPair('medieval_red_brick', 2, 1);
+  var roofTilePhoto = photoPair('roof_tiles', 1, 1);
+  var roofCeramicPhoto = photoPair('ceramic_roof_01', 1, 1);
+  var oakPhoto = photoPair('oak_veneer_01', 1, 1);
+  var plankPhoto = photoPair('wooden_floor_01', 1, 1);
 
   var sidewalkTex = canvasTex(256, function (ctx, s) {
     ctx.fillStyle = '#cfc9bb'; ctx.fillRect(0, 0, s, s);
@@ -88,66 +139,57 @@
       ctx.beginPath(); ctx.moveTo(i * 128, 0); ctx.lineTo(i * 128, s); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0, i * 128); ctx.lineTo(s, i * 128); ctx.stroke();
     }
+    // Hairline cracks
+    ctx.strokeStyle = 'rgba(90,84,70,0.5)'; ctx.lineWidth = 1.2;
+    for (var i = 0; i < 9; i++) {
+      var cx = Math.random() * s, cy = Math.random() * s;
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + (Math.random() * 30 - 15), cy + (Math.random() * 30 - 15));
+      ctx.lineTo(cx + (Math.random() * 44 - 22), cy + (Math.random() * 44 - 22));
+      ctx.stroke();
+    }
   }, 30, 1);
 
   function plasterTex(base, fleck) {
-    return canvasTex(256, function (ctx, s) {
+    return canvasTex(1024, function (ctx, s) {
       ctx.fillStyle = base; ctx.fillRect(0, 0, s, s);
-      speckle(ctx, s, 500, fleck, 0.8, 2.2);
+      // Large soft mottling
+      for (var p = 0; p < 26; p++) {
+        ctx.globalAlpha = 0.04 + Math.random() * 0.05;
+        ctx.fillStyle = fleck[(Math.random() * fleck.length) | 0];
+        ctx.beginPath();
+        ctx.ellipse(Math.random() * s, Math.random() * s, 50 + Math.random() * 130, 40 + Math.random() * 100, Math.random() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      speckle(ctx, s, 2200, fleck, 0.8, 2.4);
+      // Faint vertical weather streaks
+      for (var i = 0; i < 10; i++) {
+        ctx.globalAlpha = 0.03 + Math.random() * 0.03;
+        ctx.fillStyle = '#8a8474';
+        var x = Math.random() * s;
+        ctx.fillRect(x, Math.random() * s * 0.4, 3 + Math.random() * 6, 120 + Math.random() * 300);
+      }
+      ctx.globalAlpha = 1;
     }, 2, 2);
   }
+  var plasterRoughTex = canvasTex(256, function (ctx, s) {
+    ctx.fillStyle = '#dedede'; ctx.fillRect(0, 0, s, s);
+    speckle(ctx, s, 800, ['#cfcfcf', '#eaeaea', '#c4c4c4'], 1, 3);
+  }, 2, 2);
 
-  var brickTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#b98a68'; ctx.fillRect(0, 0, s, s);
-    var bh = 32, bw = 64;
-    for (var row = 0; row < s / bh; row++) {
-      var off = (row % 2) * bw / 2;
-      for (var col = -1; col < s / bw + 1; col++) {
-        var shade = 150 + ((Math.random() * 40) | 0);
-        ctx.fillStyle = 'rgb(' + shade + ',' + ((shade * 0.62) | 0) + ',' + ((shade * 0.45) | 0) + ')';
-        ctx.fillRect(col * bw + off + 2, row * bh + 2, bw - 4, bh - 4);
-      }
+  var barkTex = canvasTex(256, function (ctx, s) {
+    ctx.fillStyle = '#5a3d24'; ctx.fillRect(0, 0, s, s);
+    // Vertical bark ridges
+    for (var i = 0; i < 46; i++) {
+      ctx.globalAlpha = 0.25 + Math.random() * 0.4;
+      ctx.fillStyle = ['#3e2a16', '#6e4c2c', '#2e1f10'][(Math.random() * 3) | 0];
+      var x = Math.random() * s;
+      ctx.fillRect(x, 0, 3 + Math.random() * 7, s);
     }
-    ctx.fillStyle = 'rgba(0,0,0,.08)';
-    for (var i = 0; i < 200; i++) ctx.fillRect(Math.random() * s, Math.random() * s, 2, 2);
-  }, 3, 2);
-
-  function makeRoofTex(c1, c2, c3) {
-    return canvasTex(256, function (ctx, s) {
-      ctx.fillStyle = c3; ctx.fillRect(0, 0, s, s);
-      for (var row = 0; row < 8; row++) {
-        var y = row * 32;
-        for (var col = 0; col < 8; col++) {
-          var x = col * 32 + (row % 2 ? 16 : 0);
-          var g = ctx.createLinearGradient(x, y, x, y + 32);
-          g.addColorStop(0, c1); g.addColorStop(1, c2);
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(x + 16, y + 30, 15, Math.PI, 0); ctx.fill();
-          ctx.fillRect(x, y + 14, 32, 16);
-        }
-      }
-    }, 4, 2);
-  }
-  var roofTex = makeRoofTex('#c06a42', '#8a3d22', '#a34d2e');
-  var roofBlueTex = makeRoofTex('#6d9bd1', '#3d6396', '#4a7ab5');
-  var roofGreyTex = makeRoofTex('#8d939c', '#5d636c', '#767c86');
-
-  var woodTex = canvasTex(256, function (ctx, s) {
-    ctx.fillStyle = '#9a6b42'; ctx.fillRect(0, 0, s, s);
-    for (var p = 0; p < 4; p++) {
-      var y = p * 64;
-      ctx.fillStyle = ['#a1764a', '#8f6339', '#a87c50', '#96683c'][p];
-      ctx.fillRect(0, y + 2, s, 60);
-      ctx.strokeStyle = 'rgba(70,45,20,.45)'; ctx.lineWidth = 1.5;
-      for (var i = 0; i < 5; i++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y + 10 + i * 11 + Math.random() * 4);
-        ctx.bezierCurveTo(80, y + 8 + i * 11, 170, y + 14 + i * 11, s, y + 10 + i * 11);
-        ctx.stroke();
-      }
-      ctx.fillStyle = 'rgba(60,38,18,.6)'; ctx.fillRect(0, y, s, 2);
-    }
-  }, 1, 1);
+    ctx.globalAlpha = 1;
+    speckle(ctx, s, 500, ['#4a3018', '#7a5636'], 1, 2.5);
+  }, 1, 2);
 
   function skyTexture(top, mid, bot) {
     var c = document.createElement('canvas');
@@ -166,34 +208,42 @@
   /* ================= Materials ================= */
 
   var M = {
-    grass: new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }),
-    asphalt: new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.95 }),
-    asphaltPlain: new THREE.MeshStandardMaterial({ map: asphaltPlainTex, roughness: 0.95 }),
-    paver: new THREE.MeshStandardMaterial({ map: paverTex, roughness: 0.9 }),
-    sidewalk: new THREE.MeshStandardMaterial({ map: sidewalkTex, roughness: 0.9 }),
-    plasterWhite: new THREE.MeshStandardMaterial({ map: plasterTex('#f2ede3', ['#e6dfd0', '#faf7f0']), roughness: 0.85 }),
-    plasterCream: new THREE.MeshStandardMaterial({ map: plasterTex('#e8dcc4', ['#dccfb2', '#f2e9d6']), roughness: 0.85 }),
-    plasterGrey: new THREE.MeshStandardMaterial({ map: plasterTex('#c9cdd2', ['#bcc1c7', '#d6dade']), roughness: 0.85 }),
-    plasterSand: new THREE.MeshStandardMaterial({ map: plasterTex('#d9c1a0', ['#cbb391', '#e5d2b6']), roughness: 0.85 }),
-    brick: new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.9 }),
-    roofTile: new THREE.MeshStandardMaterial({ map: roofTex, roughness: 0.85 }),
-    roofBlue: new THREE.MeshStandardMaterial({ map: roofBlueTex, roughness: 0.85 }),
-    roofGrey: new THREE.MeshStandardMaterial({ map: roofGreyTex, roughness: 0.85 }),
-    roofDark: new THREE.MeshStandardMaterial({ color: 0x35373c, roughness: 0.6, metalness: 0.25 }),
-    wood: new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.7 }),
-    woodDark: new THREE.MeshStandardMaterial({ color: 0x5d4128, roughness: 0.75 }),
-    frame: new THREE.MeshStandardMaterial({ color: 0xf5f2ea, roughness: 0.5 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x9ec7e2, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.72, emissive: 0xffb45c, emissiveIntensity: 0 }),
-    concrete: new THREE.MeshStandardMaterial({ color: 0xcfc9bb, roughness: 0.95 }),
-    metal: new THREE.MeshStandardMaterial({ color: 0x2e3134, roughness: 0.45, metalness: 0.7 }),
-    trunk: new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1 }),
-    leaf: new THREE.MeshStandardMaterial({ color: 0x4d7d33, roughness: 1 }),
-    leaf2: new THREE.MeshStandardMaterial({ color: 0x5d8f3c, roughness: 1 }),
-    bush: new THREE.MeshStandardMaterial({ color: 0x3f7030, roughness: 1 }),
-    water: new THREE.MeshStandardMaterial({ color: 0x3f8fbf, roughness: 0.12, metalness: 0.25 }),
+    grass: new THREE.MeshStandardMaterial({ map: grassTex, roughnessMap: grassRoughTex, roughness: 1, envMapIntensity: 0.25 }),
+    asphalt: new THREE.MeshStandardMaterial({ map: asphaltPhoto.map, roughnessMap: asphaltPhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    asphaltPlain: new THREE.MeshStandardMaterial({ map: asphaltSidePhoto.map, roughnessMap: asphaltSidePhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    paver: new THREE.MeshStandardMaterial({ map: cobblePhoto.map, roughnessMap: cobblePhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    paverPath: new THREE.MeshStandardMaterial({ map: cobblePathPhoto.map, roughnessMap: cobblePathPhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    sidewalk: new THREE.MeshStandardMaterial({ map: sidewalkTex, roughness: 0.92, envMapIntensity: 0.3 }),
+    plasterWhite: new THREE.MeshStandardMaterial({ map: plasterTex('#f2ede3', ['#e6dfd0', '#faf7f0']), roughnessMap: plasterRoughTex, roughness: 0.92, envMapIntensity: 0.35 }),
+    plasterCream: new THREE.MeshStandardMaterial({ map: plasterTex('#e8dcc4', ['#dccfb2', '#f2e9d6']), roughnessMap: plasterRoughTex, roughness: 0.92, envMapIntensity: 0.35 }),
+    plasterGrey: new THREE.MeshStandardMaterial({ map: plasterTex('#c9cdd2', ['#bcc1c7', '#d6dade']), roughnessMap: plasterRoughTex, roughness: 0.92, envMapIntensity: 0.35 }),
+    plasterSand: new THREE.MeshStandardMaterial({ map: plasterTex('#d9c1a0', ['#cbb391', '#e5d2b6']), roughnessMap: plasterRoughTex, roughness: 0.92, envMapIntensity: 0.35 }),
+    brick: new THREE.MeshStandardMaterial({ map: brickPhoto.map, roughnessMap: brickPhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    roofTilePhoto: new THREE.MeshStandardMaterial({ map: roofTilePhoto.map, roughnessMap: roofTilePhoto.rough, roughness: 1, envMapIntensity: 0.35 }),
+    roofCeramicPhoto: new THREE.MeshStandardMaterial({ map: roofCeramicPhoto.map, roughnessMap: roofCeramicPhoto.rough, roughness: 1, envMapIntensity: 0.35 }),
+    roofDark: new THREE.MeshStandardMaterial({ color: 0x35373c, roughness: 0.55, metalness: 0.3, envMapIntensity: 0.6 }),
+    wood: new THREE.MeshStandardMaterial({ map: plankPhoto.map, roughnessMap: plankPhoto.rough, roughness: 0.85, envMapIntensity: 0.4 }),
+    woodDoor: new THREE.MeshStandardMaterial({ map: oakPhoto.map, roughnessMap: oakPhoto.rough, roughness: 0.7, envMapIntensity: 0.4 }),
+    woodDark: new THREE.MeshStandardMaterial({ color: 0x5d4128, roughness: 0.75, envMapIntensity: 0.3 }),
+    frame: new THREE.MeshStandardMaterial({ color: 0xf5f2ea, roughness: 0.45, envMapIntensity: 0.5 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0xa8c8de, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.55, emissive: 0xffb45c, emissiveIntensity: 0, envMapIntensity: 1.3 }),
+    concrete: new THREE.MeshStandardMaterial({ map: concretePhoto.map, roughnessMap: concretePhoto.rough, roughness: 1, envMapIntensity: 0.3 }),
+    metal: new THREE.MeshStandardMaterial({ color: 0x2e3134, roughness: 0.38, metalness: 0.85, envMapIntensity: 1 }),
+    trunk: new THREE.MeshStandardMaterial({ map: barkTex, roughness: 1, envMapIntensity: 0.25 }),
+    leaf: new THREE.MeshStandardMaterial({ color: 0x3f6b2c, roughness: 1, envMapIntensity: 0.25 }),
+    leaf2: new THREE.MeshStandardMaterial({ color: 0x4a7a32, roughness: 1, envMapIntensity: 0.25 }),
+    leaf3: new THREE.MeshStandardMaterial({ color: 0x558638, roughness: 1, envMapIntensity: 0.25 }),
+    leafDark: new THREE.MeshStandardMaterial({ color: 0x2f5423, roughness: 1, envMapIntensity: 0.25 }),
+    bush: new THREE.MeshStandardMaterial({ color: 0x38632a, roughness: 1, envMapIntensity: 0.25 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x3f8fbf, roughness: 0.06, metalness: 0.1, envMapIntensity: 1 }),
     lampGlow: new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffc861, emissiveIntensity: 0 }),
-    white: new THREE.MeshStandardMaterial({ color: 0xf7f4ec, roughness: 0.8 }),
-    accent: new THREE.MeshStandardMaterial({ color: 0xb4552d, roughness: 0.6 })
+    white: new THREE.MeshStandardMaterial({ color: 0xf7f4ec, roughness: 0.8, envMapIntensity: 0.4 }),
+    accent: new THREE.MeshStandardMaterial({ color: 0xb4552d, roughness: 0.6, envMapIntensity: 0.4 }),
+    laneMark: new THREE.MeshBasicMaterial({ color: 0xe8e6df }),
+    flowerRed: new THREE.MeshStandardMaterial({ color: 0xc23b4e, roughness: 0.7 }),
+    flowerYellow: new THREE.MeshStandardMaterial({ color: 0xe8b93e, roughness: 0.7 }),
+    flowerPink: new THREE.MeshStandardMaterial({ color: 0xd97ba8, roughness: 0.7 }),
+    hydrantRed: new THREE.MeshStandardMaterial({ color: 0xa32e24, roughness: 0.5, metalness: 0.2, envMapIntensity: 0.6 })
   };
 
   /* ================= Sky dome ================= */
@@ -204,10 +254,130 @@
   );
   scene.add(sky);
 
+  /* ---- Distant land so the estate doesn't float on sky ---- */
+  var outerGround = new THREE.Mesh(
+    new THREE.PlaneGeometry(700, 700),
+    new THREE.MeshStandardMaterial({ color: 0x5d7f42, roughness: 1, envMapIntensity: 0.15 })
+  );
+  outerGround.rotation.x = -Math.PI / 2;
+  outerGround.position.y = -0.08;
+  outerGround.receiveShadow = true;
+  scene.add(outerGround);
+
+  var hillMats = [0x7d8f6e, 0x6f8272, 0x86917a, 0x75816b].map(function (c) {
+    return new THREE.MeshStandardMaterial({ color: c, roughness: 1, envMapIntensity: 0.15 });
+  });
+  [[-170, -150, 70, 0.2], [30, -215, 90, 0.16], [185, -130, 75, 0.22], [-215, 40, 80, 0.18], [180, 140, 70, 0.2]].forEach(function (h, i) {
+    var hill = new THREE.Mesh(new THREE.SphereGeometry(h[2], 20, 12), hillMats[i % hillMats.length]);
+    hill.scale.y = h[3];
+    hill.position.set(h[0], -4, h[1]);
+    scene.add(hill);
+  });
+
+  // Faint distant city skyline (north + east), hazed by fog
+  var skylineMat = new THREE.MeshStandardMaterial({ color: 0x93a3b5, roughness: 0.9, envMapIntensity: 0.2 });
+  var skylineGeo = new THREE.BoxGeometry(1, 1, 1);
+  function skylineRow(x0, z0, dx, dz, n) {
+    for (var i = 0; i < n; i++) {
+      var w = 9 + Math.random() * 9, hgt = 10 + Math.random() * 20, d = 9 + Math.random() * 5;
+      var b = new THREE.Mesh(skylineGeo, skylineMat);
+      b.scale.set(w, hgt, d);
+      b.position.set(x0 + dx * i, hgt / 2 - 1, z0 + dz * i);
+      scene.add(b);
+    }
+  }
+  skylineRow(-150, -225, 22, 0, 15);
+  skylineRow(225, -130, 0, 22, 13);
+
+  /* ---- Soft procedural clouds ---- */
+  function cloudTexture() {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    var ctx = c.getContext('2d');
+    function puff(x, y, r, a) {
+      var g = ctx.createRadialGradient(x, y, 2, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,' + a + ')');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 256, 128);
+    }
+    puff(80, 75, 55, 0.9); puff(130, 60, 65, 0.95); puff(180, 78, 50, 0.85); puff(110, 88, 45, 0.8);
+    return new THREE.CanvasTexture(c);
+  }
+  var cloudTex = cloudTexture();
+  var clouds = [];
+  for (var ci = 0; ci < 9; ci++) {
+    var sm = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.55 + Math.random() * 0.3, fog: false, depthWrite: false });
+    var sp = new THREE.Sprite(sm);
+    var ang = Math.random() * Math.PI * 2, rad = 90 + Math.random() * 130;
+    sp.position.set(Math.cos(ang) * rad, 55 + Math.random() * 35, Math.sin(ang) * rad);
+    var sc = 45 + Math.random() * 45;
+    sp.scale.set(sc, sc * 0.45, 1);
+    sp.userData.speed = 0.4 + Math.random() * 0.5;
+    scene.add(sp);
+    clouds.push(sp);
+  }
+
+  /* ---- Procedural environment maps (PMREM) for realistic PBR reflections ---- */
+  function makeEnvMap(top, mid, bot, sunColor, sunDir) {
+    var envScene = new THREE.Scene();
+    var envSky = new THREE.Mesh(
+      new THREE.SphereGeometry(50, 16, 12),
+      new THREE.MeshBasicMaterial({ map: skyTexture(top, mid, bot), side: THREE.BackSide })
+    );
+    envScene.add(envSky);
+    var sunDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(7, 24),
+      new THREE.MeshBasicMaterial({ color: sunColor })
+    );
+    sunDisc.position.copy(sunDir).normalize().multiplyScalar(44);
+    sunDisc.lookAt(0, 0, 0);
+    envScene.add(sunDisc);
+    var envGround = new THREE.Mesh(
+      new THREE.CircleGeometry(48, 24),
+      new THREE.MeshBasicMaterial({ color: 0x5f7050 })
+    );
+    envGround.rotation.x = -Math.PI / 2;
+    envGround.position.y = -3;
+    envScene.add(envGround);
+    var pmrem = new THREE.PMREMGenerator(renderer);
+    var rt = pmrem.fromScene(envScene, 0.06);
+    pmrem.dispose();
+    return rt.texture;
+  }
+  var envDay = makeEnvMap('#6fa8d8', '#a8cbe8', '#e8f2f8', 0xfff2d8, new THREE.Vector3(85, 52, 42));
+  var envDusk = makeEnvMap('#241f4e', '#7a4a6e', '#e07840', 0xff9a4d, new THREE.Vector3(-55, 28, -35));
+  scene.environment = envDay;
+
+  /* ---- Soft contact blob shadows (grounds houses & trees) ---- */
+  function blobShadowTexture() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var ctx = c.getContext('2d');
+    var g = ctx.createRadialGradient(64, 64, 6, 64, 64, 62);
+    g.addColorStop(0, 'rgba(0,0,0,0.32)');
+    g.addColorStop(0.65, 'rgba(0,0,0,0.13)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+  var blobTex = blobShadowTexture();
+  function blobShadow(w, d, x, z, parent) {
+    var m = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d),
+      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, 0.035, z);
+    (parent || scene).add(m);
+    return m;
+  }
+
   /* ================= Lights ================= */
 
   var sun = new THREE.DirectionalLight(0xfff2d8, 1.25);
-  sun.position.set(70, 95, 45);
+  sun.position.set(85, 52, 42);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
@@ -217,9 +387,9 @@
   scene.add(sun);
   scene.add(sun.target);
 
-  var hemi = new THREE.HemisphereLight(0xbdd7f2, 0x8a9a7a, 0.6);
+  var hemi = new THREE.HemisphereLight(0xbdd7f2, 0x8a9a7a, 0.5);
   scene.add(hemi);
-  var amb = new THREE.AmbientLight(0xffffff, 0.12);
+  var amb = new THREE.AmbientLight(0xffffff, 0.1);
   scene.add(amb);
 
   /* ================= Helpers ================= */
@@ -251,8 +421,12 @@
 
   flat(150, 120, M.grass, 0, 0, 0);
 
-  // Main road (east-west) with dashed centre line in the texture
+  // Main road (east-west)
   flat(120, 9, M.asphalt, 0, 8, 0.02);
+  // Painted centre dashes (real road paint, not texture)
+  for (var dx = -56; dx <= 56; dx += 7) {
+    flat(3, 0.35, M.laneMark, dx, 8, 0.04);
+  }
   // Side streets (north-south)
   flat(7, 96, M.asphaltPlain, -26.5, 0, 0.015);
   flat(7, 96, M.asphaltPlain, 26.5, 0, 0.015);
@@ -266,20 +440,99 @@
   flat(2, 96, M.sidewalk, 22, 0, 0.05);
   flat(2, 96, M.sidewalk, 31, 0, 0.05);
 
+  /* ---- Grass tufts, wildflowers & pebbles (instanced, breaks the flat lawn) ---- */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var rng = mulberry32(20261121);
+  function onGrass(x, z) {
+    if (z > -2 && z < 17) return false; // main road + sidewalks band
+    if (Math.abs(x + 26.5) < 5.5 || Math.abs(x - 26.5) < 5.5) return false; // side streets
+    var plots = [[-42, -20], [-12, -20], [16, -20], [-42, 27], [-8, 27], [38, 27]];
+    for (var i = 0; i < plots.length; i++) {
+      if (Math.abs(x - plots[i][0]) < 9 && Math.abs(z - plots[i][1]) < 8.5) return false;
+    }
+    if (Math.hypot(x - 46, z + 32) < 8.5) return false; // pond
+    return true;
+  }
+  var dummy = new THREE.Object3D();
+  // (Grass tufts removed: the instanced cones rendered white in headless
+  // Chrome despite green materials, and read as litter on the lawn.)
+
+
+  // Fixed colors per mesh (setColorAt rendered white: same lesson as tufts)
+  var flowerGeo = new THREE.SphereGeometry(0.09, 6, 5);
+  var wildMeshes = [0xc23b4e, 0xe8b93e, 0xd97ba8].map(function (c) {
+    var m = new THREE.InstancedMesh(flowerGeo,
+      new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, envMapIntensity: 0.3 }), 22);
+    m.count = 0;
+    scene.add(m);
+    return m;
+  });
+  var wildPlaced = [0, 0, 0], guard = 0;
+  while (wildPlaced[0] + wildPlaced[1] + wildPlaced[2] < 60 && guard++ < 3000) {
+    var wx = (rng() * 2 - 1) * 72, wz = (rng() * 2 - 1) * 57;
+    if (!onGrass(wx, wz)) continue;
+    var wi = (rng() * 3) | 0;
+    if (wildPlaced[wi] >= 22) continue;
+    dummy.position.set(wx, 0.12, wz);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.setScalar(0.8 + rng() * 0.7);
+    dummy.updateMatrix();
+    wildMeshes[wi].setMatrixAt(wildPlaced[wi], dummy.matrix);
+    wildPlaced[wi]++;
+  }
+  wildMeshes.forEach(function (m, i) {
+    m.count = wildPlaced[i];
+    m.instanceMatrix.needsUpdate = true;
+  });
+
+  var pebGeo = new THREE.DodecahedronGeometry(0.13, 0);
+  var pebMat = new THREE.MeshStandardMaterial({ color: 0x6e675e, roughness: 1, envMapIntensity: 0.2 });
+  var pebbles = new THREE.InstancedMesh(pebGeo, pebMat, 70);
+  var pp = 0, guard = 0;
+  while (pp < 70 && guard++ < 2000) {
+    var px = (rng() * 2 - 1) * 72, pz = (rng() * 2 - 1) * 57;
+    if (!onGrass(px, pz)) continue;
+    dummy.position.set(px, 0.06, pz);
+    dummy.rotation.set(rng() * Math.PI, rng() * Math.PI, 0);
+    dummy.scale.set(0.7 + rng() * 0.9, 0.5 + rng() * 0.4, 0.7 + rng() * 0.9);
+    dummy.updateMatrix();
+    pebbles.setMatrixAt(pp, dummy.matrix);
+    pp++;
+  }
+  pebbles.count = pp;
+  pebbles.instanceMatrix.needsUpdate = true;
+  scene.add(pebbles);
+
   /* ================= Trees, lamps, benches, cars ================= */
 
-  function tree(x, z, s) {
+  function tree(x, z, s, parent) {
     s = s || 1;
     var g = new THREE.Group();
-    cyl(0.22 * s, 0.32 * s, 1.9 * s, M.trunk, 0, 0.95 * s, 0, g);
-    var f1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5 * s, 1), M.leaf);
-    f1.position.y = 2.6 * s; f1.castShadow = true; g.add(f1);
+    cyl(0.22 * s, 0.34 * s, 1.9 * s, M.trunk, 0, 0.95 * s, 0, g);
+    // Layered canopy: 5 overlapping irregular blobs, dark underside
+    var f1 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5 * s, 1), M.leafDark);
+    f1.position.y = 2.5 * s; f1.scale.set(1.15, 0.9, 1); f1.castShadow = true; g.add(f1);
     var f2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05 * s, 1), M.leaf2);
-    f2.position.set(0.7 * s, 3.4 * s, 0.3 * s); f2.castShadow = true; g.add(f2);
-    var f3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85 * s, 1), M.leaf);
-    f3.position.set(-0.7 * s, 3.2 * s, -0.4 * s); f3.castShadow = true; g.add(f3);
+    f2.position.set(0.75 * s, 3.35 * s, 0.35 * s); f2.scale.set(1, 0.85, 1.1); f2.castShadow = true; g.add(f2);
+    var f3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9 * s, 1), M.leaf);
+    f3.position.set(-0.75 * s, 3.15 * s, -0.45 * s); f3.scale.set(1.1, 0.9, 0.95); f3.castShadow = true; g.add(f3);
+    var f4 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7 * s, 1), M.leaf3);
+    f4.position.set(0.15 * s, 3.9 * s, -0.55 * s); f4.castShadow = true; g.add(f4);
+    var f5 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * s, 1), M.leaf2);
+    f5.position.set(-0.3 * s, 2.9 * s, 0.8 * s); f5.castShadow = true; g.add(f5);
+    // Slight per-tree variation so no two trees look cloned
+    g.rotation.y = Math.random() * Math.PI * 2;
+    var vs = 0.92 + Math.random() * 0.16;
+    g.scale.set(vs, 0.95 + Math.random() * 0.12, vs);
     g.position.set(x, 0, z);
-    scene.add(g);
+    if (parent) { parent.add(g); } else { scene.add(g); blobShadow(3.4 * s, 3.4 * s, x, z); }
     return g;
   }
 
@@ -311,6 +564,13 @@
     var cabin = box(2.2, 0.58, 1.65, M.glass, -0.2, 1.12, 0, g);
     cabin.castShadow = true;
     var roof = box(2.0, 0.1, 1.6, paint, -0.2, 1.44, 0, g);
+    // Headlights + taillights
+    var headMat = new THREE.MeshStandardMaterial({ color: 0xfff6d8, emissive: 0xffe9a8, emissiveIntensity: 0.6, roughness: 0.3 });
+    var tailMat = new THREE.MeshStandardMaterial({ color: 0x8c1f1a, emissive: 0x5c0f0c, emissiveIntensity: 0.5, roughness: 0.3 });
+    box(0.1, 0.16, 0.3, headMat, 2.06, 0.62, 0.62, g);
+    box(0.1, 0.16, 0.3, headMat, 2.06, 0.62, -0.62, g);
+    box(0.1, 0.16, 0.3, tailMat, -2.06, 0.62, 0.62, g);
+    box(0.1, 0.16, 0.3, tailMat, -2.06, 0.62, -0.62, g);
     var wg = new THREE.CylinderGeometry(0.36, 0.36, 0.26, 14);
     [[-1.35, 0.85], [1.35, 0.85], [-1.35, -0.85], [1.35, -0.85]].forEach(function (p) {
       var w = new THREE.Mesh(wg, M.metal);
@@ -325,6 +585,96 @@
   car(-8.5, 6.5, 0.06, 0x8c2f26);
   car(33, 9.6, Math.PI - 0.05, 0x2e4a6b);
   car(52, 8, Math.PI / 2, 0xd8d2c4);
+
+  // Fire hydrant near the main-road corner
+  (function hydrant() {
+    var g = new THREE.Group();
+    cyl(0.22, 0.26, 0.85, M.hydrantRed, 0, 0.43, 0, g);
+    var cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), M.hydrantRed);
+    cap.position.y = 0.92; cap.castShadow = true; g.add(cap);
+    cyl(0.09, 0.09, 0.5, M.hydrantRed, 0, 0.45, 0.2, g).rotation.x = Math.PI / 2;
+    cyl(0.09, 0.09, 0.5, M.hydrantRed, 0.2, 0.45, 0, g).rotation.z = Math.PI / 2;
+    g.position.set(-30, 0, 1.2);
+    scene.add(g);
+    blobShadow(1.2, 1.2, -30, 1.2);
+  })();
+
+  // More parked cars, varied colors
+  car(-26.5, -30, Math.PI / 2, 0xc8c8c8);
+  car(18, 9.6, Math.PI, 0x3a3a3a);
+  car(26.5, -14, Math.PI / 2, 0x7a2020);
+  car(-11.6, 17.5, 0, 0xdadada); // parked in the Asri 02 driveway
+
+  /* ---- People walking on the sidewalks ---- */
+  var walkers = [];
+  function person(x, z, shirt, axis, min, max, speed) {
+    var g = new THREE.Group();
+    var skin = new THREE.MeshStandardMaterial({ color: 0xd9a986, roughness: 0.8 });
+    var shirtMat = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.9 });
+    var pantsMat = new THREE.MeshStandardMaterial({ color: 0x2e3440, roughness: 0.95 });
+    function limb(w, h, d, mat, px, py, pz) {
+      var geo = new THREE.BoxGeometry(w, h, d);
+      geo.translate(0, -h / 2, 0); // pivot at top (hip / shoulder)
+      var m = new THREE.Mesh(geo, mat);
+      m.position.set(px, py, pz);
+      m.castShadow = true;
+      g.add(m);
+      return m;
+    }
+    var legL = limb(0.17, 0.78, 0.17, pantsMat, -0.11, 0.78, 0);
+    var legR = limb(0.17, 0.78, 0.17, pantsMat, 0.11, 0.78, 0);
+    var armL = limb(0.12, 0.6, 0.12, shirtMat, -0.3, 1.28, 0);
+    var armR = limb(0.12, 0.6, 0.12, shirtMat, 0.3, 1.28, 0);
+    var torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.58, 0.24), shirtMat);
+    torso.position.y = 1.07; torso.castShadow = true; g.add(torso);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skin);
+    head.position.y = 1.52; head.castShadow = true; g.add(head);
+    var hair = new THREE.Mesh(new THREE.SphereGeometry(0.155, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x1e1a16, roughness: 1 }));
+    hair.position.y = 1.55; g.add(hair);
+    g.position.set(x, 0, z);
+    scene.add(g);
+    walkers.push({ g: g, axis: axis, pos: axis === 'x' ? x : z, min: min, max: max,
+      speed: speed, dir: 1, legL: legL, legR: legR, armL: armL, armR: armR, phase: Math.random() * 6 });
+  }
+  person(-40, 2.2, 0xb4552d, 'x', -48, 48, 1.3);
+  person(35, 13.8, 0x2e5d8a, 'x', -48, 48, 1.0);
+  person(-31, -20, 0x3f6b2c, 'z', -40, 40, 0.9);
+
+  /* ---- Street name signs ---- */
+  function signTexture(text) {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#1d5c33'; ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 34);
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  function streetSign(x, z, text, ry) {
+    var g = new THREE.Group();
+    cyl(0.05, 0.05, 2.5, M.metal, 0, 1.25, 0, g, 8);
+    var board = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, 0.42, 0.06),
+      new THREE.MeshStandardMaterial({ map: signTexture(text), roughness: 0.6 })
+    );
+    board.position.y = 2.55; board.castShadow = true; g.add(board);
+    g.position.set(x, 0, z);
+    g.rotation.y = ry;
+    scene.add(g);
+  }
+  streetSign(-24.2, 1.0, 'JL. KENANGA', 0);
+  streetSign(24.2, 15.2, 'JL. MELATI', Math.PI);
+
+  // Hedges along a few plot fronts + park edge
+  [[16, -12.4, 5], [38, 19.6, 5], [-12, -12.4, 4], [33, -22, 8]].forEach(function (h) {
+    var hedge = box(h[2], 0.75, 0.6, M.bush, h[0], 0.5, h[1], scene);
+    hedge.castShadow = true;
+  });
 
   /* ================= Park (NE corner) with pond ================= */
 
@@ -378,7 +728,7 @@
       balcony: true, carport: true, pool: false, accentWall: true },
     { id: 'asri1', name: 'Rumah Asri 01', type: 'Rumah Keluarga 2 Lantai', price: 'Rp 2,1 M', kt: 4, km: 2, lt: 200, lb: 150,
       desc: 'Rumah keluarga dengan atap limasan, bata ekspos di fasad, dan halaman depan yang teduh.',
-      x: -12, z: -20, ry: 0, w: 10, d: 8.5, floors: 2, roof: 'pitched', roofMat: 'roofBlue', wall: M.brick, upperWall: M.plasterCream,
+      x: -12, z: -20, ry: 0, w: 10, d: 8.5, floors: 2, roof: 'pitched', roofMat: 'roofTilePhoto', wall: M.brick, upperWall: M.plasterCream,
       balcony: false, carport: true, pool: false, accentWall: false },
     { id: 'senja', name: 'Kubus Senja', type: 'Rumah Kubus Minimalis', price: 'Rp 1,8 M', kt: 3, km: 2, lt: 180, lb: 120,
       desc: 'Desain kubus minimalis dengan aksen kayu dan jendela sudut yang besar. Cocok untuk keluarga muda.',
@@ -390,7 +740,7 @@
       balcony: true, carport: false, pool: false, accentWall: false },
     { id: 'asri2', name: 'Rumah Asri 02', type: 'Rumah Minimalis 1 Lantai', price: 'Rp 1,35 M', kt: 3, km: 2, lt: 150, lb: 90,
       desc: 'Satu lantai yang lapang dengan atap pelana dan teras depan lebar untuk santai sore.',
-      x: -8, z: 27, ry: Math.PI, w: 10, d: 8, floors: 1, roof: 'pitched', roofMat: 'roofGrey', wall: M.plasterCream, upperWall: null,
+      x: -8, z: 27, ry: Math.PI, w: 10, d: 8, floors: 1, roof: 'pitched', roofMat: 'roofCeramicPhoto', wall: M.plasterCream, upperWall: null,
       balcony: false, carport: true, pool: false, accentWall: false },
     { id: 'anggrek', name: 'Villa Anggrek', type: 'Vila 1 Lantai + Kolam', price: 'Rp 3,2 M', kt: 3, km: 3, lt: 280, lb: 180,
       desc: 'Vila satu lantai dengan kolam renang pribadi, dinding kaca penuh, dan taman tropis.',
@@ -402,7 +752,8 @@
     var g = new THREE.Group();
     box(w, h, 0.1, M.frame, 0, 0, 0, g);
     box(w - 0.18, h - 0.18, 0.12, M.glass, 0, 0, 0.01, g);
-    box(0.09, h - 0.18, 0.14, M.frame, 0, 0, 0.01, g); // mullion
+    box(0.09, h - 0.18, 0.14, M.frame, 0, 0, 0.01, g); // vertical mullion
+    box(w - 0.18, 0.09, 0.14, M.frame, 0, 0, 0.01, g); // horizontal mullion (4 panes)
     box(w + 0.14, 0.09, 0.2, M.frame, 0, -h / 2 - 0.03, 0.03, g); // sill
     return g;
   }
@@ -413,11 +764,23 @@
     parent.add(win);
   }
 
+  function scaleUVs(geo, sx, sy) {
+    // ExtrudeGeometry UVs are in shape units — rescale so 1 texture tile
+    // spans a realistic size instead of repeating dozens of times.
+    var uv = geo.attributes.uv;
+    for (var i = 0; i < uv.count; i++) {
+      uv.setXY(i, uv.getX(i) * sx, uv.getY(i) * sy);
+    }
+    uv.needsUpdate = true;
+    return geo;
+  }
+
   function pitchedRoof(w, d, h, mat) {
     var shape = new THREE.Shape();
     shape.moveTo(-w / 2, 0); shape.lineTo(w / 2, 0); shape.lineTo(0, h); shape.closePath();
     var geo = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false });
     geo.translate(0, 0, -d / 2);
+    scaleUVs(geo, 0.16, 0.16); // photo tiles: ~6 world units per texture tile
     var m = new THREE.Mesh(geo, mat);
     m.castShadow = true; m.receiveShadow = true;
     return m;
@@ -428,10 +791,15 @@
     var W = cfg.w, D = cfg.d;
     var floorH = cfg.floors === 2 ? 3.1 : 3.5;
 
-    // Plot slab + driveway + garden path
+    // Plot slab + driveway + garden path (real cobblestone)
     box(15, 0.14, 13, M.concrete, 0, 0.07, 0.5, g);
     flat(3.2, 15, M.paver, 3.6, 13.5, 0.16, g);
-    flat(1.6, 5, M.paver, -1.2, 6.4, 0.16, g);
+    flat(1.6, 5, M.paverPath, -1.2, 6.4, 0.16, g);
+    // Driveway edge curbs
+    box(0.18, 0.16, 15, M.concrete, 1.9, 0.24, 13.5, g);
+    box(0.18, 0.16, 15, M.concrete, 5.3, 0.24, 13.5, g);
+    // Soft contact shadow under the whole plot
+    blobShadow(17, 15, 0, 0.5, g);
 
     // Ground floor
     box(W, floorH, D, cfg.wall, 0, floorH / 2 + 0.14, 0, g);
@@ -459,11 +827,21 @@
 
     // Roof
     if (cfg.roof === 'pitched') {
-      var roof = pitchedRoof(W + 1, D + 1, 2.2, M[cfg.roofMat] || M.roofTile);
+      var roof = pitchedRoof(W + 1, D + 1, 2.2, M[cfg.roofMat] || M.roofTilePhoto);
       roof.position.set(0, topY, 0);
       g.add(roof);
       // Ridge cap
       box(W + 1, 0.18, 0.3, M.roofDark, 0, topY + 2.25, 0, g);
+      // Chimney (brick, on the slope near the ridge)
+      box(0.9, 1.7, 0.9, M.brick, W / 4, topY + 1.5, -D / 6, g);
+      box(1.1, 0.16, 1.1, M.concrete, W / 4, topY + 2.4, -D / 6, g);
+      // Gutters along both eaves + downspouts
+      [-1, 1].forEach(function (s) {
+        var gut = cyl(0.09, 0.09, W + 1.1, M.metal, 0, topY + 0.12, s * (D / 2 + 0.55), g, 8);
+        gut.rotation.z = Math.PI / 2;
+        gut.castShadow = false;
+        cyl(0.07, 0.07, topY + 0.1, M.metal, -W / 2 + 0.4, (topY + 0.1) / 2 + 0.1, s * (D / 2 + 0.55), g, 8);
+      });
     } else {
       box(W + 0.7, 0.28, D + 0.7, M.roofDark, 0, topY + 0.14, 0, g);
       // Parapet
@@ -475,8 +853,15 @@
       box(1.1, 0.6, 0.8, M.metal, -W / 4, topY + 0.6, -D / 4, g);
     }
 
-    // Door (front, +z)
-    var door = box(1.15, 2.25, 0.12, M.wood, -1.2, 1.27, D / 2 + 0.04, g);
+    // Door (front, +z) — frame, two recessed panels, knob
+    var door = box(1.15, 2.25, 0.12, M.woodDoor, -1.2, 1.27, D / 2 + 0.04, g);
+    box(0.1, 2.4, 0.16, M.frame, -1.85, 1.27, D / 2 + 0.04, g);
+    box(0.1, 2.4, 0.16, M.frame, -0.55, 1.27, D / 2 + 0.04, g);
+    box(1.4, 0.1, 0.16, M.frame, -1.2, 2.52, D / 2 + 0.04, g);
+    box(0.85, 0.8, 0.05, M.woodDark, -1.2, 1.85, D / 2 + 0.11, g);
+    box(0.85, 0.8, 0.05, M.woodDark, -1.2, 0.85, D / 2 + 0.11, g);
+    var knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), M.metal);
+    knob.position.set(-0.75, 1.2, D / 2 + 0.14); g.add(knob);
     box(1.5, 0.16, 0.7, M.paver, -1.2, 0.22, D / 2 + 0.35, g); // step
 
     // Windows — front
@@ -525,25 +910,38 @@
       water.castShadow = false;
     }
 
-    // Front fence with driveway gap
+    // Front fence with driveway gap + cap rails
     var fz = 7;
     var fenceH = 0.95;
     box(4.6, fenceH, 0.18, M.white, -5.1, fenceH / 2 + 0.14, fz, g);
     box(2.4, fenceH, 0.18, M.white, 6.2, fenceH / 2 + 0.14, fz, g);
+    box(4.7, 0.08, 0.24, M.accent, -5.1, fenceH + 0.18, fz, g);
+    box(2.5, 0.08, 0.24, M.accent, 6.2, fenceH + 0.18, fz, g);
     box(0.3, 1.25, 0.3, M.accent, -2.75, 0.77, fz, g);
     box(0.3, 1.25, 0.3, M.accent, 2.05, 0.77, fz, g);
     box(0.3, 1.25, 0.3, M.accent, 5.05, 0.77, fz, g);
     box(0.3, 1.25, 0.3, M.accent, 7.35, 0.77, fz, g);
 
-    // Garden: bushes + a small tree
-    [[-5.6, 4.8], [-4.2, 5.4], [5.8, 5.2]].forEach(function (p) {
+    // Garden: bushes + flowers + a small tree
+    var flowerGeo = new THREE.SphereGeometry(0.09, 8, 6);
+    var flowerMats = [M.flowerRed, M.flowerYellow, M.flowerPink];
+    [[-5.6, 4.8], [-4.2, 5.4], [5.8, 5.2]].forEach(function (p, bi) {
       var b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.65, 1), M.bush);
       b.scale.y = 0.72; b.position.set(p[0], 0.6, p[1]); b.castShadow = true;
       g.add(b);
+      // 3 tiny flowers on each bush
+      for (var fi = 0; fi < 3; fi++) {
+        var fl = new THREE.Mesh(flowerGeo, flowerMats[(bi + fi) % 3]);
+        fl.position.set(p[0] - 0.3 + fi * 0.3, 0.95 + (fi % 2) * 0.12, p[1] + 0.35);
+        g.add(fl);
+      }
     });
-    var gt = tree(0, 0, 0.8);
-    gt.position.set(-5.8, 0, 2.2);
-    g.add(gt);
+
+    // Mailbox by the driveway
+    var mbPost = box(0.09, 1.05, 0.09, M.metal, 5.6, 0.67, 7.6, g);
+    box(0.5, 0.32, 0.32, M.metal, 5.6, 1.32, 7.6, g);
+    box(0.06, 0.22, 0.1, M.hydrantRed, 5.85, 1.45, 7.6, g);
+    tree(-5.8, 2.2, 0.8, g);
 
     // Selection ring (hidden until selected)
     var ring = new THREE.Mesh(
@@ -573,10 +971,10 @@
   /* ================= Custom orbit controls (touch + mouse) ================= */
 
   var orbit = {
-    target: new THREE.Vector3(0, 1, 2),
-    tTarget: new THREE.Vector3(0, 1, 2),
-    theta: 0.62, phi: 0.85, radius: 72,
-    tTheta: 0.62, tPhi: 0.85, tRadius: 72
+    target: new THREE.Vector3(0, 1.5, 6),
+    tTarget: new THREE.Vector3(0, 1.5, 6),
+    theta: 0.62, phi: 1.20, radius: 36,
+    tTheta: 0.62, tPhi: 1.20, tRadius: 36
   };
   function applyOrbit() {
     var sp = Math.sin(orbit.phi), cp = Math.cos(orbit.phi);
@@ -729,14 +1127,14 @@
   var isDusk = false;
   var duskMix = 0; // 0 = day, 1 = dusk
   var dayState = {
-    sunColor: new THREE.Color(0xfff2d8), sunI: 1.25, sunPos: new THREE.Vector3(70, 95, 45),
-    hemiSky: new THREE.Color(0xbdd7f2), hemiGround: new THREE.Color(0x8a9a7a), hemiI: 0.6,
-    fog: new THREE.Color(0xcfe0ec), ambI: 0.12, glow: 0
+    sunColor: new THREE.Color(0xfff2d8), sunI: 1.25, sunPos: new THREE.Vector3(85, 52, 42),
+    hemiSky: new THREE.Color(0xbdd7f2), hemiGround: new THREE.Color(0x8a9a7a), hemiI: 0.5,
+    fog: new THREE.Color(0xcfe0ec), ambI: 0.1, glow: 0
   };
   var duskState = {
     sunColor: new THREE.Color(0xff9a4d), sunI: 0.55, sunPos: new THREE.Vector3(-55, 28, -35),
-    hemiSky: new THREE.Color(0x6a5a8a), hemiGround: new THREE.Color(0x3a3340), hemiI: 0.32,
-    fog: new THREE.Color(0x4a3f66), ambI: 0.07, glow: 0.9
+    hemiSky: new THREE.Color(0x6a5a8a), hemiGround: new THREE.Color(0x3a3340), hemiI: 0.28,
+    fog: new THREE.Color(0x4a3f66), ambI: 0.06, glow: 0.9
   };
   var toggleBtn = document.getElementById('dayToggle');
   toggleBtn.addEventListener('click', function () {
@@ -744,6 +1142,7 @@
     toggleBtn.textContent = isDusk ? 'Siang' : 'Senja';
     sky.material.map = isDusk ? skyDuskTex : skyDayTex;
     sky.material.needsUpdate = true;
+    scene.environment = isDusk ? envDusk : envDay;
   });
 
   var tmpColor = new THREE.Color();
@@ -759,8 +1158,8 @@
     amb.intensity = from.ambI + (to.ambI - from.ambI) * t;
     tmpColor.lerpColors(from.fog, to.fog, t);
     scene.fog.color.copy(tmpColor);
-    M.glass.emissiveIntensity = t * 1.3;
-    M.lampGlow.emissiveIntensity = t * 2.2;
+    M.glass.emissiveIntensity = t * 1.8;
+    M.lampGlow.emissiveIntensity = t * 2.6;
   }
 
   /* ================= Hint + resize + loop ================= */
@@ -793,10 +1192,10 @@
     orbit.target.lerp(orbit.tTarget, 0.08);
     applyOrbit();
 
-    // Day/dusk blend
+    // Day/dusk blend (fast enough to finish even on slow devices)
     var target = isDusk ? 1 : 0;
     if (Math.abs(duskMix - target) > 0.001) {
-      duskMix += (target - duskMix) * Math.min(1, dt * 2.2);
+      duskMix += (target - duskMix) * Math.min(1, dt * 3.5);
       applyDayDusk();
     }
 
@@ -806,6 +1205,31 @@
       ring.material.opacity = 0.6 + Math.sin(t * 3) * 0.25;
     }
 
+    // Clouds drift slowly across the sky
+    for (var ci = 0; ci < clouds.length; ci++) {
+      clouds[ci].position.x += clouds[ci].userData.speed * dt;
+      if (clouds[ci].position.x > 250) clouds[ci].position.x = -250;
+    }
+
+    // People walk back and forth on the sidewalks
+    walkers.forEach(function (w) {
+      w.phase += dt * 6.5 * Math.abs(w.speed);
+      w.pos += w.dir * Math.abs(w.speed) * dt;
+      if (w.pos > w.max) { w.pos = w.max; w.dir = -1; }
+      if (w.pos < w.min) { w.pos = w.min; w.dir = 1; }
+      if (w.axis === 'x') {
+        w.g.position.x = w.pos;
+        w.g.rotation.y = w.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      } else {
+        w.g.position.z = w.pos;
+        w.g.rotation.y = w.dir > 0 ? 0 : Math.PI;
+      }
+      w.g.position.y = Math.abs(Math.sin(w.phase)) * 0.05;
+      var sw = Math.sin(w.phase) * 0.55;
+      w.legL.rotation.x = sw; w.legR.rotation.x = -sw;
+      w.armL.rotation.x = -sw * 0.7; w.armR.rotation.x = sw * 0.7;
+    });
+
     renderer.render(scene, camera);
   }
   applyOrbit();
@@ -814,8 +1238,21 @@
   // Debug hook for verification (harmless in production)
   window.__estate = {
     webglOk: function () { try { return !!renderer.getContext(); } catch (e) { return false; } },
+    setView: function (theta, phi, radius, tx, ty, tz) {
+      orbit.theta = orbit.tTheta = theta;
+      orbit.phi = orbit.tPhi = phi;
+      orbit.radius = orbit.tRadius = radius;
+      orbit.target.set(tx, ty, tz);
+      orbit.tTarget.set(tx, ty, tz);
+      applyOrbit();
+      return true;
+    },
     houses: HOUSES.length,
-    revision: 'r147'
+    revision: 'r147',
+    duskMix: function () { return duskMix; },
+    glassGlow: function () { return M.glass.emissiveIntensity; },
+    envKind: function () { return scene.environment === envDusk ? 'dusk' : (scene.environment === envDay ? 'day' : 'other'); },
+    sunI: function () { return sun.intensity; }
   };
 
 })();
